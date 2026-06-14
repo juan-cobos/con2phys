@@ -109,7 +109,7 @@ if __name__ == "__main__":
     s = dl[1]
     print(f"spikes:     {s.spikes.shape} {s.spikes.dtype}")
     print(f"clusters:   {s.clusters.shape} {s.clusters.dtype}")
-    print(f"cluster_ids:{s.cluster_ids.shape}  brain_areas:{np.unique(s.brain_areas)}")
+    print(f"cluster_ids:{s.cluster_ids.shape}  brain_areas:{s.brain_areas.shape}")
     print(f"waveforms:  {s.waveforms.shape}")
     print(f"lfp:        {s.lfp1.shape}, {s.lfp2.shape}, {s.lfp3.shape}")
     print(f"trial_data: {s.trial_data.shape} cols={s.trial_data.columns}")
