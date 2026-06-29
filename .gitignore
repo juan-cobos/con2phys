@@ -1,0 +1,17 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Dataset contents (keep the directory, ignore its data)
+dataset/*
+!dataset/.gitkeep
+
+uv.lock
+.python-version

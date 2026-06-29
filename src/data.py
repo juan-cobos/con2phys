@@ -3,17 +3,11 @@ from pathlib import Path
 
 import numpy as np
 import polars as pl
-from scipy.io import loadmat
 
 DATA_DIR = Path("dataset")
 VALID_IDS = set(range(1, 19))
 VERTICAL_SPACING = 20  # um
 SAMPLING_RATE = 500  # Hz
-
-
-def _load_mat(path: Path, key: str) -> np.ndarray:
-    """Load a single named variable from a MATLAB .mat file."""
-    return loadmat(path)[key]
 
 
 class Session:
@@ -32,24 +26,24 @@ class Session:
 
         # Spike times (s) and the cluster (unit) id each spike belongs to.
         # Both are [num_spikes] and index-aligned.
-        self.spikes = _load_mat(self.data_path / "spikes.mat", "spikes").ravel()
-        self.clusters = _load_mat(self.data_path / "clusters.mat", "clusters").ravel()
+        self.spikes = np.load(self.data_path / "spikes.npy").ravel()
+        self.clusters = np.load(self.data_path / "clusters.npy").ravel()
 
         # Per-unit metadata, ordered the same as waveforms: [num_units].
-        ba = _load_mat(self.data_path / "brain_area.mat", "brain_areas")
-        self.cluster_ids = ba["cluster_id"][0, 0].ravel()
-        self.brain_areas = ba["brain_area"][0, 0].ravel()
+        ba = np.load(self.data_path / "brain_area.npy", allow_pickle=True).item()
+        self.cluster_ids = ba["cluster_id"].ravel()
+        self.brain_areas = ba["brain_area"].ravel()
 
         # Average waveform per unit: [num_units, 128].
-        self.waveforms = _load_mat(self.data_path / "waveforms.mat", "wf")
+        self.waveforms = np.load(self.data_path / "waveforms.npy")
 
         # LFP per brain area, [num_channels, num_timestamps]. Channel counts
         # differ between areas, so each area is kept as its own array.
-        self.lfp1 = _load_mat(self.data_path / "lfp_1.mat", "lfp1")
-        self.lfp2 = _load_mat(self.data_path / "lfp_2.mat", "lfp2")
-        self.lfp3 = _load_mat(self.data_path / "lfp_3.mat", "lfp3")
+        self.lfp1 = np.load(self.data_path / "lfp_1.npy")
+        self.lfp2 = np.load(self.data_path / "lfp_2.npy")
+        self.lfp3 = np.load(self.data_path / "lfp_3.npy")
 
-        self.trial_data = pl.read_excel(self.data_path / "trial_data.xlsx")
+        self.trial_data = pl.read_csv(self.data_path / "trial_data.csv")
 
         print(f"Session {id} loaded: {self.n_units} units, {self.spikes.size} spikes")
 

@@ -3,9 +3,8 @@ name = "brainhack2026"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
-    "fastexcel>=0.20.2",
     "matplotlib>=3.11.0",
     "numpy>=2.4.6",
     "polars>=1.41.2",
