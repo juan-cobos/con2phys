@@ -11,7 +11,6 @@ wheels/
 
 # Dataset contents (keep the directory, ignore its data)
 dataset/*
-!dataset/.gitkeep
 !dataset/README.md
 
 # Generated figures
