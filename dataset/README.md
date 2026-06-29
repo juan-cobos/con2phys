@@ -1,4 +1,4 @@
-Dataset
+# Dataset
 
 The dataset consists of 18 compressed files, each corresponding to one of the 18 mice included in the dataset. The data includes single-unit activity (SUA) and local field potentials (LFP) recorded using a Neuropixels probe during a behavioral task. Task details and electrode placements are intentionally anonymized to reduce biases and minimize workload. The data has been collected from 3 simultaneously recorded brain areas. Every recording includes LFP (≥20 channels) and SUA (≥5 units, total of 1449 units) signals from each brain area. The length of the recordings varies between 55 and 101 minutes.
 
