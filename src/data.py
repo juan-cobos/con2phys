@@ -11,8 +11,6 @@ VALID_IDS = set(range(1, 19))
 VERTICAL_SPACING = 20  # um
 SAMPLING_RATE = 500  # Hz
 ALL_SESSIONS = list(VALID_IDS)
-# The three recorded brain areas. Labels the per-unit ``brain_area`` metadata
-# and the ``lfp_<area>.npy`` files.
 AREAS = (1, 2, 3)
 
 

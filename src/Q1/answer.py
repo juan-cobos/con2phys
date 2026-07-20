@@ -12,8 +12,6 @@ from src.data import ALL_SESSIONS, AREAS, Dataloader
 
 if __name__ == "__main__":
     sessions = list(ALL_SESSIONS)  # copy: pop() below would mutate the shared list
-    sessions.pop(11)  # remove duplicated lfp
-
     dl = Dataloader(sessions)
 
     # fr_per_area[area] -> one mean firing rate per session. Averaging over
