@@ -1,3 +1,4 @@
+import weakref
 from collections.abc import Iterable, Iterator
 from pathlib import Path
 
@@ -8,6 +9,7 @@ DATA_DIR = Path("dataset")
 VALID_IDS = set(range(1, 19))
 VERTICAL_SPACING = 20  # um
 SAMPLING_RATE = 500  # Hz
+ALL_SESSIONS = list(VALID_IDS)
 
 
 class Session:
@@ -58,6 +60,12 @@ class Dataloader:
     Each session holds hundreds of MB of LFP, so sessions are loaded on first
     access rather than all up front.
 
+    The cache holds sessions only *weakly*: a session stays cached while the
+    caller keeps a reference to it, and is freed automatically once no longer
+    referenced. So ``for session in dl:`` streams one session at a time —
+    each iteration frees the previous one — while ``s = dl[1]`` stays cached
+    for as long as ``s`` is alive.
+
     Examples::
 
         dl = Dataloader()              # all 18 sessions
@@ -75,15 +83,19 @@ class Dataloader:
                 f"invalid session ids {sorted(invalid)}; valid: {sorted(VALID_IDS)}"
             )
         self.ids = ids
-        self._cache: dict[int, Session] = {}
+        self._cache: weakref.WeakValueDictionary[int, Session] = (
+            weakref.WeakValueDictionary()
+        )
 
     def load(self, id: int) -> Session:
         """Load session ``id`` (from cache if already loaded)."""
         if id not in self.ids:
             raise KeyError(f"session {id} not in this loader ({self.ids})")
-        if id not in self._cache:
-            self._cache[id] = Session(id)
-        return self._cache[id]
+        session = self._cache.get(id)
+        if session is None:
+            session = Session(id)
+            self._cache[id] = session
+        return session
 
     def __getitem__(self, id: int) -> Session:
         return self.load(id)

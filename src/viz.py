@@ -56,6 +56,40 @@ def plot_waveforms(session: Session, out_dir: Path) -> Path:
     return path
 
 
+def plot_spikes_over_time(session: Session, out_dir: Path, bin_s: float) -> Path:
+    """Population firing rate over time, one line per region.
+
+    For each region the spikes of all its units are pooled and histogrammed
+    onto shared ``bin_s``-second bins (same region/cluster selection as Q2),
+    then divided by the bin width to give a spike rate in Hz.
+    """
+    edges = np.arange(session.spikes.min(), session.spikes.max() + bin_s, bin_s)
+    centers = edges[:-1] + bin_s / 2
+
+    fig, ax = plt.subplots(figsize=(12, 4))
+    for region, color in zip(REGIONS, ("C0", "C1", "C2")):
+        clusters = session.cluster_ids[session.brain_areas == region]
+        in_region = np.isin(session.clusters, clusters)
+        counts = np.histogram(session.spikes[in_region], bins=edges)[0]
+        ax.plot(
+            centers,
+            counts / bin_s,
+            color=color,
+            lw=1,
+            label=f"Region {region}  (n={len(clusters)} units)",
+        )
+
+    ax.set_xlabel("time (s)")
+    ax.set_ylabel(f"population rate (spikes/s, {bin_s:g} s bins)")
+    ax.set_title(f"Session {session.id} - pooled spike rate by region")
+    ax.legend(loc="upper right", fontsize=8)
+    fig.tight_layout()
+    path = out_dir / "spikes_over_time.png"
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+    return path
+
+
 def plot_psd(session: Session, out_dir: Path, fmin: float, fmax: float) -> Path:
     """One panel per region: PSD via Raw.compute_psd().plot().
 
@@ -90,6 +124,9 @@ def main() -> None:
     parser.add_argument(
         "--fmax", type=float, default=250, help="max PSD frequency (Hz, <= Nyquist)"
     )
+    parser.add_argument(
+        "--spike-bin", type=float, default=1.0, help="spike-rate bin width (s)"
+    )
     args = parser.parse_args()
 
     ids = args.sessions if args.sessions else range(1, 19)
@@ -98,8 +135,9 @@ def main() -> None:
         out_dir = args.out / str(sid)
         out_dir.mkdir(parents=True, exist_ok=True)
         wf_path = plot_waveforms(session, out_dir)
+        spk_path = plot_spikes_over_time(session, out_dir, bin_s=args.spike_bin)
         psd_path = plot_psd(session, out_dir, fmin=args.fmin, fmax=args.fmax)
-        print(f"  wrote {wf_path} and {psd_path}")
+        print(f"  wrote {wf_path}, {spk_path} and {psd_path}")
 
 
 if __name__ == "__main__":
