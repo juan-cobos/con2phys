@@ -1,5 +1,6 @@
 import weakref
 from collections.abc import Iterable, Iterator
+from functools import cached_property
 from pathlib import Path
 
 import numpy as np
@@ -10,6 +11,9 @@ VALID_IDS = set(range(1, 19))
 VERTICAL_SPACING = 20  # um
 SAMPLING_RATE = 500  # Hz
 ALL_SESSIONS = list(VALID_IDS)
+# The three recorded brain areas. Labels the per-unit ``brain_area`` metadata
+# and the ``lfp_<area>.npy`` files.
+AREAS = (1, 2, 3)
 
 
 class Session:
@@ -52,6 +56,41 @@ class Session:
     @property
     def n_units(self) -> int:
         return self.cluster_ids.size
+
+    @property
+    def duration_s(self) -> float:
+        """Length of the whole recording, in seconds."""
+        return self.lfp1.shape[1] / SAMPLING_RATE
+
+    def area_mask(self, region: int) -> np.ndarray:
+        """Boolean mask over this session's units, selecting those in ``region``.
+
+        Indexes the per-unit arrays (``cluster_ids``, ``brain_areas``,
+        ``waveforms``, :attr:`spike_counts`, and anything aligned with them).
+        """
+        return self.brain_areas == region
+
+    @cached_property
+    def spike_counts(self) -> np.ndarray:
+        """Spike count per unit, aligned with :attr:`cluster_ids`. [num_units]
+
+        Cluster ids are only unique *within* a session -- different mice can
+        reuse the same id -- so this is a per-session array positionally
+        aligned with this session's units, never an id-keyed mapping that
+        could silently collide across sessions.
+
+        Units that never fire are absent from the spike train and get a count
+        of 0, so they survive as silent units instead of being dropped.
+
+        Cached: the ``np.unique`` pass is over every spike in the session
+        (millions), and the result is reused by each area.
+        """
+        uniq, counts = np.unique(self.clusters, return_counts=True)
+        count_by_cluster = dict(zip(uniq.tolist(), counts.tolist()))
+        return np.array(
+            [count_by_cluster.get(c, 0) for c in self.cluster_ids.tolist()],
+            dtype=float,
+        )
 
 
 class Dataloader:

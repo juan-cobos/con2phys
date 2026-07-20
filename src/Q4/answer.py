@@ -10,11 +10,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import friedmanchisquare, wilcoxon
 
-from src.data import ALL_SESSIONS, Dataloader
+from src.data import ALL_SESSIONS, AREAS, Dataloader
 
 dl = Dataloader(ALL_SESSIONS)
 
-AREAS = (1, 2, 3)
 
 BIN = 0.100  # 100 ms
 

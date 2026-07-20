@@ -20,7 +20,6 @@ def sig_label(p: float) -> str:
     return "***" if p < 1e-3 else "**" if p < 1e-2 else "*" if p < 0.05 else "ns"
 
 
-AREAS = (1, 2, 3)
 MAX_LAG_S = 1
 
 

@@ -25,8 +25,8 @@ from scipy.stats import friedmanchisquare, wilcoxon
 from statsmodels.tools.sm_exceptions import InfeasibleTestError
 from statsmodels.tsa.stattools import grangercausalitytests
 
-from src.data import ALL_SESSIONS, SAMPLING_RATE, Dataloader
-from src.Q6.answer import AREAS, directed_connectivity, region_signal, sig_label
+from src.data import ALL_SESSIONS, AREAS, SAMPLING_RATE, Dataloader
+from src.Q6.answer import directed_connectivity, region_signal, sig_label
 
 
 def holm(raw_p: list) -> np.ndarray:

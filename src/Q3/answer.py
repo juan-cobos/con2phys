@@ -25,13 +25,12 @@ from ripple_detection.detectors import (  # noqa: E402
 )
 from scipy.signal import butter, filtfilt
 
-from src.data import ALL_SESSIONS, DATA_DIR, SAMPLING_RATE
+from src.data import ALL_SESSIONS, AREAS, DATA_DIR, SAMPLING_RATE
 
 # Ripple band. Traditionally 150-250 Hz, but the LFP is sampled at 500 Hz so the
 # Nyquist limit is 250 Hz: the library filters won't run here, and the top of
 # the band is unresolvable. Clip just under Nyquist and expose it for revisiting.
 RIPPLE_BAND = (150.0, 240.0)
-AREAS = (1, 2, 3)
 DETECTORS = (
     Kay_ripple_detector,
     Karlsson_ripple_detector,
