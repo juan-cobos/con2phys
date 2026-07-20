@@ -8,14 +8,13 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.stats import friedmanchisquare, wilcoxon
 
 from src.data import ALL_SESSIONS, AREAS, Dataloader
-
-dl = Dataloader(ALL_SESSIONS)
-
+from src.stats import compare_paired, sig_stars
 
 BIN = 0.100  # 100 ms
+
+dl = Dataloader(ALL_SESSIONS)
 
 
 def binned_trains(
@@ -57,45 +56,28 @@ for s in dl:
 # Stack into a [n_sessions, n_areas] matrix. Every session contributes one
 # value per area, so the areas are paired session-by-session.
 strength = np.column_stack([strength_by_ba[a] for a in AREAS])
-# A session is usable only if all three areas are non-nan (paired tests need it).
-paired = strength[~np.isnan(strength).any(axis=1)]
-mean = paired.mean(axis=0)
-sem = paired.std(axis=0, ddof=1) / np.sqrt(paired.shape[0])
+# Drop sessions missing an area, then run the standard Friedman + Holm-Wilcoxon
+# paired comparison (see src/stats.py). The plotting below reuses these fields.
+res = compare_paired(strength, AREAS)
+paired, mean, sem = res.paired, res.mean, res.sem
+pairs, holm, p_omnibus = res.pairs, res.holm_p, res.p_omnibus
 
 print("\n=== pairwise interaction strength across sessions ===")
 for j, area in enumerate(AREAS):
     print(f"area {area}: mean |r| = {mean[j]:.4f} +/- {sem[j]:.4f} SEM")
-print(f"(n = {paired.shape[0]} sessions with all three areas)")
+print(f"(n = {res.n} sessions with all three areas)")
 
-# Omnibus test: does interaction strength differ across the three areas?
-# Friedman is the non-parametric repeated-measures test (paired, no normality
-# assumption), appropriate given small-N areas and skewed |r| values.
-chi2, p_omnibus = friedmanchisquare(*paired.T)
-print(f"\nFriedman across areas: chi2 = {chi2:.3f}, p = {p_omnibus:.4g}")
+print(f"\nFriedman across areas: chi2 = {res.chi2:.3f}, p = {p_omnibus:.4g}")
 
-# Post-hoc pairwise Wilcoxon signed-rank tests with Holm-Bonferroni correction.
-pairs = [(0, 1), (0, 2), (1, 2)]
-raw_p = [wilcoxon(paired[:, i], paired[:, j]).pvalue for i, j in pairs]
-order = np.argsort(raw_p)
-holm = np.empty(len(pairs))
-m = len(pairs)
-for rank, idx in enumerate(order):
-    holm[idx] = min(1.0, raw_p[idx] * (m - rank))
-holm = np.maximum.accumulate(holm[order])[np.argsort(order)]  # enforce monotonic
 print("\nPost-hoc Wilcoxon (Holm-corrected):")
-for (i, j), rp, hp in zip(pairs, raw_p, holm):
-    sig = "*" if hp < 0.05 else "ns"
+for (i, j), rp, hp in zip(pairs, res.raw_p, holm):
     print(
-        f"  area {AREAS[i]} vs area {AREAS[j]}: p_raw = {rp:.4g}, p_holm = {hp:.4g} {sig}"
+        f"  area {AREAS[i]} vs area {AREAS[j]}: "
+        f"p_raw = {rp:.4g}, p_holm = {hp:.4g} {sig_stars(hp)}"
     )
 
-best = AREAS[int(np.argmax(mean))]
+best = res.winner("max")
 print(f"\nStrongest pairwise interactions at 100 ms: area {best}")
-
-
-def sig_label(p: float) -> str:
-    """Star notation for a p-value."""
-    return "***" if p < 1e-3 else "**" if p < 1e-2 else "*" if p < 0.05 else "ns"
 
 
 # Bar plot: mean +/- SEM per area, with per-session points and significance
@@ -118,7 +100,7 @@ for k, ((i, j), hp) in enumerate(zip(pairs, holm)):
     ax.plot(
         [x[i], x[i], x[j], x[j]], [y, y + step * 0.2, y + step * 0.2, y], c="k", lw=1
     )
-    ax.text((x[i] + x[j]) / 2, y + step * 0.2, sig_label(hp), ha="center", va="bottom")
+    ax.text((x[i] + x[j]) / 2, y + step * 0.2, sig_stars(hp), ha="center", va="bottom")
 
 ax.set_xticks(x)
 ax.set_xticklabels([f"Area {a}" for a in AREAS])

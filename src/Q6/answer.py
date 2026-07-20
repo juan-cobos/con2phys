@@ -10,15 +10,9 @@ from pprint import pp
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy import signal
-from scipy.stats import friedmanchisquare, t, wilcoxon
 
 from src.data import ALL_SESSIONS, SAMPLING_RATE, Dataloader
-
-
-def sig_label(p: float) -> str:
-    """Star notation for a p-value."""
-    return "***" if p < 1e-3 else "**" if p < 1e-2 else "*" if p < 0.05 else "ns"
-
+from src.stats import compare_paired, one_sample_wilcoxon, sig_stars
 
 MAX_LAG_S = 1
 
@@ -92,10 +86,12 @@ if __name__ == "__main__":
     strength = np.column_stack([np.abs([r for r, _ in per_pair[p]]) for p in pairs])
     lag = np.column_stack([[lag for _, lag in per_pair[p]] for p in pairs])
 
-    mean = strength.mean(axis=0)
-    sem = strength.std(axis=0, ddof=1) / np.sqrt(n)
-    # 95% CI on the mean via the t distribution (small N, unknown variance).
-    ci = t.ppf(0.975, n - 1) * sem
+    # Standard paired comparison across pairs (nothing is dropped here -- every
+    # pair is present in every session by construction). See src/stats.py.
+    res = compare_paired(strength, pairs)
+    mean, sem, ci = res.mean, res.sem, res.ci
+    # One-sample Wilcoxon per pair: is this pair's coupling above zero at all?
+    w_gt0 = one_sample_wilcoxon(strength)
 
     # Signed mean lag cancels opposing leads across sessions, so also report
     # the mean |lag| (typical delay magnitude) and the sign breakdown: for pair
@@ -119,12 +115,10 @@ if __name__ == "__main__":
 
     print(f"\n=== directed connectivity |peak r| across {n} sessions ===")
     for j, (a, b) in enumerate(pairs):
-        # One-sample Wilcoxon: is this pair's coupling above zero at all?
-        w_p = wilcoxon(strength[:, j]).pvalue
         print(
             f"pair {(a, b)}: |r| = {mean[j]:.4f} +/- {sem[j]:.4f} SEM, "
             f"95% CI [{mean[j] - ci[j]:.4f}, {mean[j] + ci[j]:.4f}], "
-            f"p(>0) = {w_p:.4g}"
+            f"p(>0) = {w_gt0[j]:.4g}"
         )
         print(
             f"           mean |lag| = {abs_lag[j] * 1e3:.1f} ms; "
@@ -133,26 +127,17 @@ if __name__ == "__main__":
             f"synced in {synced[j]}/{n}"
         )
 
-    # Omnibus test: does connectivity strength differ across the three pairs?
-    # Friedman is the non-parametric repeated-measures test (paired, no
-    # normality assumption), matching the small-N, skewed |r| values.
-    chi2, p_omnibus = friedmanchisquare(*strength.T)
-    print(f"\nFriedman across pairs: chi2 = {chi2:.3f}, p = {p_omnibus:.4g}")
+    p_omnibus = res.p_omnibus
+    print(f"\nFriedman across pairs: chi2 = {res.chi2:.3f}, p = {p_omnibus:.4g}")
 
-    comparisons = list(combinations(range(len(pairs)), 2))
-    raw_p = [wilcoxon(strength[:, i], strength[:, j]).pvalue for i, j in comparisons]
-    order = np.argsort(raw_p)
-    holm = np.empty(len(comparisons))
-    m = len(comparisons)
-    for rank, idx in enumerate(order):
-        holm[idx] = min(1.0, raw_p[idx] * (m - rank))
-    holm = np.maximum.accumulate(holm[order])[np.argsort(order)]  # enforce monotonic
+    comparisons, holm = res.pairs, res.holm_p
     print("\nPost-hoc Wilcoxon (Holm-corrected):")
-    for (i, j), rp, hp in zip(comparisons, raw_p, holm):
-        sig = "*" if hp < 0.05 else "ns"
-        print(f"  {pairs[i]} vs {pairs[j]}: p_raw = {rp:.4g}, p_holm = {hp:.4g} {sig}")
+    for (i, j), rp, hp in zip(comparisons, res.raw_p, holm):
+        print(
+            f"  {pairs[i]} vs {pairs[j]}: p_raw = {rp:.4g}, p_holm = {hp:.4g} {sig_stars(hp)}"
+        )
 
-    best = pairs[int(np.argmax(mean))]
+    best = res.winner("max")
     print(f"\nStrongest directed functional connectivity: pair {best}")
 
     # ---- Figure: strength (with stats) + directed-flow schematic ----------
@@ -178,7 +163,7 @@ if __name__ == "__main__":
             lw=1,
         )
         axL.text(
-            (x[i] + x[j]) / 2, y + step * 0.2, sig_label(hp), ha="center", va="bottom"
+            (x[i] + x[j]) / 2, y + step * 0.2, sig_stars(hp), ha="center", va="bottom"
         )
 
     axL.set_xticks(x)

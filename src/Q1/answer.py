@@ -6,9 +6,9 @@ Question 1
 from collections import defaultdict
 
 import numpy as np
-from scipy.stats import friedmanchisquare, t, wilcoxon
 
 from src.data import ALL_SESSIONS, AREAS, Dataloader
+from src.stats import compare_paired, sig_stars
 
 if __name__ == "__main__":
     sessions = list(ALL_SESSIONS)  # copy: pop() below would mutate the shared list
@@ -36,47 +36,28 @@ if __name__ == "__main__":
             f"  session {s.id:>2} [{s.duration_s / 60:>6.1f} min]  " + "  ".join(cells)
         )
 
-    # [n_sessions, n_areas]; areas stay paired session-by-session.
+    # [n_sessions, n_areas]; areas stay paired session-by-session. compare_paired
+    # drops sessions missing an area, then runs the standard Friedman omnibus +
+    # Holm-corrected pairwise Wilcoxon comparison (see src/stats.py).
     fr = np.column_stack([fr_per_area[a] for a in AREAS])
-    # Paired tests need all three areas present, so keep complete sessions only.
-    paired = fr[~np.isnan(fr).any(axis=1)]
-    n = paired.shape[0]
+    res = compare_paired(fr, AREAS)
 
-    mean = paired.mean(axis=0)
-    sem = paired.std(axis=0, ddof=1) / np.sqrt(n)
-    # 95% CI on the mean via the t distribution (small N, unknown variance).
-    ci = t.ppf(0.975, n - 1) * sem
-
-    print(f"\n=== firing rate by brain area across {n} sessions ===")
+    print(f"\n=== firing rate by brain area across {res.n} sessions ===")
     for j, area in enumerate(AREAS):
+        lo, hi = res.mean[j] - res.ci[j], res.mean[j] + res.ci[j]
         print(
-            f"area {area}: mean = {mean[j]:.4f} +/- {sem[j]:.4f} SEM spikes/s, "
-            f"95% CI [{mean[j] - ci[j]:.4f}, {mean[j] + ci[j]:.4f}]"
+            f"area {area}: mean = {res.mean[j]:.4f} +/- {res.sem[j]:.4f} SEM spikes/s, "
+            f"95% CI [{lo:.4f}, {hi:.4f}]"
         )
-    print(f"(n = {n} sessions with all three areas)")
+    print(f"(n = {res.n} sessions with all three areas)")
 
-    # Omnibus test: does firing rate differ across the three areas? Friedman is
-    # the non-parametric repeated-measures test (paired, no normality
-    # assumption), appropriate for small N and skewed firing rates.
-    chi2, p_omnibus = friedmanchisquare(*paired.T)
-    print(f"\nFriedman across areas: chi2 = {chi2:.3f}, p = {p_omnibus:.4g}")
+    print(f"\nFriedman across areas: chi2 = {res.chi2:.3f}, p = {res.p_omnibus:.4g}")
 
-    # Post-hoc pairwise Wilcoxon signed-rank tests with Holm-Bonferroni.
-    pairs = [(0, 1), (0, 2), (1, 2)]
-    raw_p = [wilcoxon(paired[:, i], paired[:, j]).pvalue for i, j in pairs]
-    order = np.argsort(raw_p)
-    holm = np.empty(len(pairs))
-    m = len(pairs)
-    for rank, idx in enumerate(order):
-        holm[idx] = min(1.0, raw_p[idx] * (m - rank))
-    holm = np.maximum.accumulate(holm[order])[np.argsort(order)]  # enforce monotonic
     print("\nPost-hoc Wilcoxon (Holm-corrected):")
-    for (i, j), rp, hp in zip(pairs, raw_p, holm):
-        sig = "*" if hp < 0.05 else "ns"
+    for (i, j), rp, hp in zip(res.pairs, res.raw_p, res.holm_p):
         print(
             f"  area {AREAS[i]} vs area {AREAS[j]}: "
-            f"p_raw = {rp:.4g}, p_holm = {hp:.4g} {sig}"
+            f"p_raw = {rp:.4g}, p_holm = {hp:.4g} {sig_stars(hp)}"
         )
 
-    lowest = AREAS[int(np.argmin(mean))]
-    print(f"\nLowest firing rate over the entire recording: area {lowest}")
+    print(f"\nLowest firing rate over the entire recording: area {res.winner('min')}")
