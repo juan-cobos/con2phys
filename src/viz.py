@@ -60,7 +60,7 @@ def plot_spikes_over_time(session: Session, out_dir: Path, bin_s: float) -> Path
     """Population firing rate over time, one line per region.
 
     For each region the spikes of all its units are pooled and histogrammed
-    onto shared ``bin_s``-second bins (same region/cluster selection as Q2),
+    onto shared ``bin_s``-second bins (same region/cluster selection as Q4),
     then divided by the bin width to give a spike rate in Hz.
     """
     edges = np.arange(session.spikes.min(), session.spikes.max() + bin_s, bin_s)
