@@ -11,23 +11,11 @@ import numpy as np
 
 from src.data import ALL_SESSIONS, AREAS, Dataloader
 from src.stats import compare_paired, sig_stars
+from src.utils import binned_trains
 
 BIN = 0.100  # 100 ms
 
 dl = Dataloader(ALL_SESSIONS)
-
-
-def binned_trains(
-    spikes: np.ndarray,
-    clusters: np.ndarray,
-    area_clusters: np.ndarray,
-    bin_edges: np.ndarray,
-) -> np.ndarray:
-    """Spike-count matrix [n_bins, n_clusters] for one brain area."""
-    trains = np.empty((len(bin_edges) - 1, len(area_clusters)))
-    for j, c in enumerate(area_clusters):
-        trains[:, j] = np.histogram(spikes[clusters == c], bins=bin_edges)[0]
-    return trains
 
 
 def interaction_strength(trains: np.ndarray) -> float:
@@ -41,10 +29,8 @@ def interaction_strength(trains: np.ndarray) -> float:
 
 strength_by_ba: dict[int, list[float]] = defaultdict(list)
 for s in dl:
-    spike_bin = np.arange(s.spikes.min(), s.spikes.max() + 1, BIN)
     for area in AREAS:
-        area_clusters = s.cluster_ids[s.brain_areas == area]
-        trains = binned_trains(s.spikes, s.clusters, area_clusters, spike_bin)
+        trains = binned_trains(s, area, BIN)
         strength = interaction_strength(trains)
         strength_by_ba[area].append(strength)
         print(

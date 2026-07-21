@@ -1,6 +1,7 @@
-"""Shared helpers for accessing session LFP data."""
+"""Shared helpers for accessing session data and building correlation graphs."""
 
 import mne
+import networkx as nx
 import numpy as np
 
 from src.data import SAMPLING_RATE, Session
@@ -57,3 +58,47 @@ def get_raw(session: Session, region: int) -> mne.io.RawArray:
         ch_types="eeg",
     )
     return mne.io.RawArray(lfp, info, verbose=False)
+
+
+def binned_trains(session: Session, area: int, bin_s: float) -> np.ndarray:
+    """Spike-count matrix [n_bins, n_units] for one area's clusters.
+
+    Each column is a unit's spike train over the whole recording, histogrammed
+    onto shared ``bin_s``-second bins. Silent units (no spikes -> constant,
+    zero-variance train) are dropped, as they carry no correlation.
+    """
+    clusters = session.cluster_ids[session.brain_areas == area]
+    edges = np.arange(session.spikes.min(), session.spikes.max() + bin_s, bin_s)
+    trains = np.empty((len(edges) - 1, len(clusters)))
+    for j, c in enumerate(clusters):
+        trains[:, j] = np.histogram(session.spikes[session.clusters == c], bins=edges)[0]
+    return trains[:, trains.std(axis=0) > 0]
+
+
+def correlation_graph(signals: np.ndarray) -> nx.Graph:
+    """Weighted graph over the rows of ``signals``; edge weight = |Pearson r|.
+
+    ``signals`` is [n_variables, n_samples] (e.g. LFP channels or unit spike
+    trains). Every variable is a node and every pair is connected with weight
+    equal to the absolute correlation of their two rows (self-loops removed).
+    The absolute value keeps every weight non-negative, as the modularity of a
+    weighted graph assumes.
+    """
+    corr = np.abs(np.corrcoef(signals))
+    np.fill_diagonal(corr, 0.0)
+    return nx.from_numpy_array(corr)
+
+
+def get_modularity(signals: np.ndarray, seed: int = 0) -> float:
+    """Modularity of the correlation graph over the rows of ``signals``.
+
+    Partitions the variables into communities with Louvain (seeded, since it is
+    randomized), then scores that partition's modularity: high when the rows
+    split into strongly-coupled groups, near zero when they form one
+    homogeneously connected blob. Returns NaN for fewer than two variables.
+    """
+    graph = correlation_graph(signals)
+    if graph.number_of_nodes() < 2:
+        return float("nan")
+    communities = nx.community.louvain_communities(graph, weight="weight", seed=seed)
+    return nx.community.modularity(graph, communities, weight="weight")
