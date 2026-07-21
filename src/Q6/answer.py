@@ -63,7 +63,6 @@ def functional_connectivity(signals: dict[int, np.ndarray]) -> dict[tuple, tuple
 
 if __name__ == "__main__":
     sessions = ALL_SESSIONS
-    sessions.pop(11)  # remove duplicated lfp
     dl = Dataloader(sessions)
 
     per_pair: dict[tuple, list[tuple]] = {}

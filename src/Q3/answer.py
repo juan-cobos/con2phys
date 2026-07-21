@@ -93,7 +93,6 @@ def detect_session_area(
 
 if __name__ == "__main__":
     sessions = ALL_SESSIONS
-    sessions.pop(11)  # remove duplicated lfp
 
     # One independent job per (session, area). Each LFP recording is hundreds of
     # MB and filtering doubles that, so default to a modest worker count to stay
