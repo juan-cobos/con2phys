@@ -1,19 +1,3 @@
-"""
-Question 6 — Granger-causality cross-check.
-
-``answer.py`` ranks directed functional connectivity by the *lag of the peak
-cross-correlation*: whichever region's trace has to be shifted to line up with
-the other is called the "leader". That is a purely lag-based notion of
-direction. This script asks the same question with a model-based test —
-statsmodels Granger causality — and compares the two.
-
-Granger causality asks: does adding region X's past to an autoregressive model
-of region Y significantly reduce Y's prediction error? If so, X "Granger-causes"
-Y. Unlike cross-correlation it is asymmetric by construction (X->Y and Y->X are
-separate tests), so it can also reveal *bidirectional* coupling that a single
-peak-lag sign cannot.
-"""
-
 import contextlib
 import os
 import warnings
@@ -21,24 +5,12 @@ from itertools import combinations
 
 import numpy as np
 from scipy.signal import decimate
-from scipy.stats import friedmanchisquare, wilcoxon
 from statsmodels.tools.sm_exceptions import InfeasibleTestError
 from statsmodels.tsa.stattools import grangercausalitytests
 
 from src.data import ALL_SESSIONS, AREAS, SAMPLING_RATE, Dataloader
-from src.Q6.answer import directed_connectivity, region_signal, sig_label
-
-
-def holm(raw_p: list) -> np.ndarray:
-    """Holm-Bonferroni step-down adjustment of a list of p-values."""
-    raw_p = np.asarray(raw_p)
-    m = len(raw_p)
-    order = np.argsort(raw_p)
-    adj = np.empty(m)
-    for rank, idx in enumerate(order):
-        adj[idx] = min(1.0, raw_p[idx] * (m - rank))
-    return np.maximum.accumulate(adj[order])[np.argsort(order)]  # enforce monotonic
-
+from src.Q6.answer import directed_connectivity, region_signal
+from src.stats import compare_paired, holm_correct, one_sample_wilcoxon, sig_stars
 
 # Granger on raw 500 Hz LFP is expensive, so decimate (anti-alias FIR) before
 # fitting. A coarse rate (e.g. 100 Hz, 10 ms/lag) cannot resolve the 1-9 ms peak
@@ -84,15 +56,7 @@ def granger_test(cause: np.ndarray, effect: np.ndarray, lags: list = LAGS) -> tu
 
 
 if __name__ == "__main__":
-    sessions = ALL_SESSIONS
-    sessions.pop(11)  # remove duplicated lfp (same as answer.py)
-    dl = Dataloader(sessions)
-
-    # The session is the unit of replication (one mouse each), so we reduce each
-    # session to one number per pair and do all inference across the 17 sessions
-    # -- the same paired design as answer.py. The within-session F-test's own
-    # p-value is pseudoreplicated (it counts ~10^5 autocorrelated timepoints as
-    # independent, so it always underflows to 0) and is deliberately discarded.
+    dl = Dataloader(ALL_SESSIONS)
     per_pair_F: dict[tuple, list[tuple]] = {}  # (a, b) -> [(F_a->b, F_b->a), ...]
     xc: dict[tuple, list[float]] = {}  # (a, b) -> cross-correlation peak lags (s)
 
@@ -127,7 +91,7 @@ if __name__ == "__main__":
 
     # --- Directionality: is each pair's net Granger flow reliable across sessions?
     # One-sample Wilcoxon of DI vs 0 over sessions, Holm-corrected across pairs.
-    di_p = holm([wilcoxon(di[:, j]).pvalue for j in range(len(pairs))])
+    di_p = holm_correct(one_sample_wilcoxon(di))
     print("\nNet directionality (Wilcoxon DI vs 0, Holm across pairs):")
     for j, (a, b) in enumerate(pairs):
         m = di[:, j].mean()
@@ -135,22 +99,23 @@ if __name__ == "__main__":
         net = f"{a}->{b}" if m >= 0 else f"{b}->{a}"
         print(
             f"  pair {a}-{b}: DI = {m:+.3f} +/- {sem:.3f} SEM, "
-            f"net {net}, p_holm = {di_p[j]:.4g} {sig_label(di_p[j])}"
+            f"net {net}, p_holm = {di_p[j]:.4g} {sig_stars(di_p[j])}"
         )
 
     # --- Strength: does Granger coupling magnitude differ across pairs?
     # Friedman + post-hoc Wilcoxon on session-paired F, mirroring answer.py.
-    chi2, p_omnibus = friedmanchisquare(*gstr.T)
-    print(f"\nGranger coupling strength (max directed F): Friedman p = {p_omnibus:.4g}")
-    comps = list(combinations(range(len(pairs)), 2))
-    str_p = holm([wilcoxon(gstr[:, i], gstr[:, j]).pvalue for i, j in comps])
-    for (i, j), hp in zip(comps, str_p):
+    res = compare_paired(gstr, pairs)
+    print(
+        f"\nGranger coupling strength (max directed F): "
+        f"Friedman p = {res.p_omnibus:.4g}"
+    )
+    for (i, j), hp in zip(res.pairs, res.holm_p):
         print(
             f"  {pairs[i]} (med F={np.median(gstr[:, i]):.0f}) vs "
             f"{pairs[j]} (med F={np.median(gstr[:, j]):.0f}): "
-            f"p_holm = {hp:.4g} {sig_label(hp)}"
+            f"p_holm = {hp:.4g} {sig_stars(hp)}"
         )
-    print(f"Strongest Granger coupling: pair {pairs[int(np.argmax(gstr.mean(0)))]}")
+    print(f"Strongest Granger coupling: pair {res.winner('max')}")
 
     # --- Cross-method agreement, both now judged at the session level.
     print("\n=== cross-correlation vs Granger direction (per pair) ===")
