@@ -98,5 +98,6 @@ if __name__ == "__main__":
 
     out = Path("figures/Q14")
     out.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out / "modularity_clusters.png", dpi=150)
-    print(f"\nSaved plot to {out / 'modularity_clusters.png'}")
+    save_path = out / "modularity_spikes.png"
+    fig.savefig(save_path, dpi=150)
+    print(f"\nSaved plot to {save_path.name}")
