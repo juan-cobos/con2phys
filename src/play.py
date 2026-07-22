@@ -6,16 +6,18 @@ import sys
 
 import numpy as np
 
-from src.data import DATA_DIR, SAMPLING_RATE
+from src.data import DATA_DIR, SAMPLING_RATE, Session
 
 
 def inspect(session_id: int) -> None:
     path = DATA_DIR / str(session_id)
+    session = Session(session_id)
+
     print(f"\n{'=' * 70}\nSession {session_id}  ({path})\n{'=' * 70}")
 
     # ---- per-spike arrays ------------------------------------------------
-    spikes = np.load(path / "spikes.npy").ravel()
-    clusters = np.load(path / "clusters.npy").ravel()
+    spikes = session.spikes
+    clusters = session.clusters
     print("\n-- per-spike (index-aligned) --")
     print(
         f"spikes    {spikes.shape} {spikes.dtype}  [{spikes.min():.2f} .. {spikes.max():.2f}] s"
@@ -25,10 +27,9 @@ def inspect(session_id: int) -> None:
     spike_span_s = float(spikes.max() - spikes.min())
 
     # ---- per-unit arrays -------------------------------------------------
-    ba = np.load(path / "brain_area.npy", allow_pickle=True).item()
-    cluster_ids = ba["cluster_id"].ravel()
-    brain_areas = ba["brain_area"].ravel()
-    waveforms = np.load(path / "waveforms.npy")
+    cluster_ids = session.cluster_ids
+    brain_areas = session.brain_areas
+    waveforms = session.waveforms
     print("\n-- per-unit --")
     print(f"cluster_ids {cluster_ids.shape} {cluster_ids.dtype}")
     print(
@@ -68,17 +69,12 @@ def inspect(session_id: int) -> None:
 
         # Memory-map the LFP: we only want the shape, and these arrays are
         # hundreds of MB each.
-        lfp_path = path / f"lfp_{area}.npy"
-        if lfp_path.exists():
-            lfp = np.load(lfp_path, mmap_mode="r")
-            n_chan, n_samp = lfp.shape
-            lfp_dur = n_samp / SAMPLING_RATE
-            chans, samps, dur = f"{n_chan}", f"{n_samp}", f"{lfp_dur:.1f}"
-        else:
-            chans = samps = dur = "-"
-            lfp_dur = float("nan")
-
+        lfp = session.get_lfp_in(area)
+        n_chan, n_samp = lfp.shape
+        lfp_dur = n_samp / SAMPLING_RATE
+        chans, samps, dur = f"{n_chan}", f"{n_samp}", f"{lfp_dur:.1f}"
         rate = n_spk.mean() / lfp_dur if lfp_dur == lfp_dur else float("nan")
+
         print(
             f"{area:>4} {area_clusters.size:>6} {int(n_spk.sum()):>10} {chans:>10} "
             f"{samps:>12} {dur:>12} {rate:>13.4f}"
@@ -87,20 +83,17 @@ def inspect(session_id: int) -> None:
     # ---- how long is "the entire recording"? -----------------------------
     # Matters for any rate denominator: the spike span can be noticeably
     # shorter than the LFP if spiking starts late or stops early.
-    lfp1 = path / "lfp_1.npy"
-    lfp2 = path / "lfp_2.npy"
-    lfp3 = path / "lfp_3.npy"
+    lfp1_dur = session.lfp1.shape[0]
+    lfp2_dur = session.lfp2.shape[0]
+    lfp3_dur = session.lfp3.shape[0]
+    print("\n-- recording duration --")
+    print(f"spike span (max-min): {spike_span_s:>10.1f} s")
+    print(f"lfp_1 timestamps:     {lfp1_dur:>10.1f} s")
+    print(f"lfp_2 timestamps:     {lfp2_dur:>10.1f} s")
+    print(f"lfp_3 timestamps:     {lfp3_dur:>10.1f} s")
+    print(f"difference:           {lfp_dur - spike_span_s:>10.1f} s")
 
-    if lfp1.exists():
-        lfp1_dur = np.load(lfp1, mmap_mode="r").shape[1] / SAMPLING_RATE
-        lfp2_dur = np.load(lfp2, mmap_mode="r").shape[1] / SAMPLING_RATE
-        lfp3_dur = np.load(lfp3, mmap_mode="r").shape[1] / SAMPLING_RATE
-        print("\n-- recording duration --")
-        print(f"spike span (max-min): {spike_span_s:>10.1f} s")
-        print(f"lfp_1 timestamps:     {lfp1_dur:>10.1f} s")
-        print(f"lfp_2 timestamps:     {lfp2_dur:>10.1f} s")
-        print(f"lfp_3 timestamps:     {lfp3_dur:>10.1f} s")
-        print(f"difference:           {lfp_dur - spike_span_s:>10.1f} s")
+    print(session.trial_data.head())
 
 
 if __name__ == "__main__":
