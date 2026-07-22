@@ -90,6 +90,30 @@ class Session:
             dtype=float,
         )
 
+    def get_spikes_in(self, area: int) -> np.ndarray:
+        """Spike times (s) of every unit in ``area``, pooled. [num_spikes]
+
+        Cluster ids repeat across sessions but not within one, so selecting by
+        this session's own ids is unambiguous. Order follows :attr:`spikes`.
+        """
+        clusters = self.cluster_ids[self.area_mask(area)]
+        return self.spikes[np.isin(self.clusters, clusters)]
+
+    def get_unit_spikes_in(self, area: int) -> list[np.ndarray]:
+        """Spike times (s) of each unit in ``area``: one array per cluster.
+
+        Same spikes as :meth:`get_spikes_in`, kept split by unit for measures
+        that are only meaningful per neuron (e.g. spike-field phase locking,
+        where pooling units with different preferred phases cancels the effect).
+        Silent units contribute empty arrays rather than disappearing.
+        """
+        clusters = self.cluster_ids[self.area_mask(area)]
+        return [self.spikes[self.clusters == c] for c in clusters]
+
+    def get_lfp_in(self, area: int) -> np.ndarray:
+        """LFP array for ``area`` (1/2/3): [num_channels, num_timestamps]."""
+        return getattr(self, f"lfp{area}")
+
 
 class Dataloader:
     """Loads recording sessions by id, lazily and cached.
