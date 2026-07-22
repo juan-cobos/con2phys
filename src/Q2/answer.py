@@ -11,7 +11,6 @@ from scipy.signal import butter, filtfilt
 
 from src.data import ALL_SESSIONS, AREAS, SAMPLING_RATE, Dataloader
 from src.stats import compare_paired, sig_stars
-from src.utils import get_lfp
 
 BROADBAND = (1.0, 100.0)
 V_TO_UV = 1e6
@@ -32,7 +31,7 @@ if __name__ == "__main__":
     for s in dl:
         cells = []
         for area in AREAS:
-            lfp = get_lfp(s, area)
+            lfp = s.get_lfp_in(area)
             power = band_power(lfp) if lfp.size else float("nan")
             power_per_area[area].append(power)
             cells.append(f"area {area}: {power:>8.2f} uV^2 (ch={lfp.shape[0]:>3})")

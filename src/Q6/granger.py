@@ -61,7 +61,7 @@ if __name__ == "__main__":
     xc: dict[tuple, list[float]] = {}  # (a, b) -> cross-correlation peak lags (s)
 
     for s in dl:
-        full = {a: region_signal(getattr(s, f"lfp{a}")) for a in AREAS}
+        full = {a: region_signal(s.get_lfp_in(a)) for a in AREAS}
         dec = {a: prep(full[a]) for a in AREAS}
         for a, b in combinations(AREAS, 2):
             f_fwd = granger_test(dec[a], dec[b])[0]  # a -> b

@@ -7,11 +7,6 @@ import numpy as np
 from src.data import SAMPLING_RATE, Session
 
 
-def get_lfp(session: Session, region: int) -> np.ndarray:
-    """LFP array for ``region`` (1/2/3): [num_channels, num_timestamps]."""
-    return getattr(session, f"lfp{region}")
-
-
 def get_stim_lfp(
     session: Session, region: int, max_segment_pct: float | None = None
 ) -> np.ndarray:
@@ -29,7 +24,7 @@ def get_stim_lfp(
 
     Returns [num_channels, num_kept_timestamps].
     """
-    lfp = get_lfp(session, region)
+    lfp = session.get_lfp_in(region)
     n = lfp.shape[1]
     windows = session.trial_data.select("stim_start", "outcome").drop_nulls()
     stim = windows["stim_start"].to_numpy()
@@ -51,7 +46,7 @@ def get_stim_lfp(
 
 def get_raw(session: Session, region: int) -> mne.io.RawArray:
     """Wrap a region's LFP array in an MNE Raw object."""
-    lfp = get_lfp(session, region)
+    lfp = session.get_lfp_in(region)
     info = mne.create_info(
         ch_names=[f"ch{i}" for i in range(lfp.shape[0])],
         sfreq=SAMPLING_RATE,

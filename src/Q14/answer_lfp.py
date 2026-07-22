@@ -12,7 +12,7 @@ import numpy as np
 
 from src.data import ALL_SESSIONS, AREAS, Dataloader
 from src.stats import compare_paired, sig_stars
-from src.utils import get_lfp, get_modularity
+from src.utils import get_modularity
 
 if __name__ == "__main__":
     dl = Dataloader(list(ALL_SESSIONS))
@@ -22,7 +22,7 @@ if __name__ == "__main__":
     for s in dl:
         cells = []
         for area in AREAS:
-            lfp = get_lfp(s, area)
+            lfp = s.get_lfp_in(area)
             mod = get_modularity(lfp)
             mod_per_area[area].append(mod)
             cells.append(f"area {area}: Q={mod:>6.3f} (ch={lfp.shape[0]:>3})")
