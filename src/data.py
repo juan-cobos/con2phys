@@ -114,6 +114,25 @@ class Session:
         """LFP array for ``area`` (1/2/3): [num_channels, num_timestamps]."""
         return getattr(self, f"lfp{area}")
 
+    def event_bounds(
+        self, start_event: str, stop_event: str, min_samples: int = 1
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Sample-index window ``[lo, hi)`` per trial for a ``start_event`` ->
+        ``stop_event`` segment, plus a boolean mask of usable trials.
+        """
+        start = self.trial_data[start_event].to_numpy().astype(float)
+        stop = self.trial_data[stop_event].to_numpy().astype(float)
+        n_samples = self.lfp1.shape[1]
+
+        safe_start = np.where(np.isfinite(start), start, 0.0)
+        safe_stop = np.where(np.isfinite(stop), stop, 0.0)
+        lo = np.floor(safe_start * SAMPLING_RATE).astype(int)
+        hi = np.ceil(safe_stop * SAMPLING_RATE).astype(int)
+
+        keep = np.isfinite(start) & np.isfinite(stop)
+        keep &= (lo >= 0) & (hi <= n_samples) & ((hi - lo) >= min_samples)
+        return lo, hi, keep
+
 
 class Dataloader:
     """Loads recording sessions by id, lazily and cached.
