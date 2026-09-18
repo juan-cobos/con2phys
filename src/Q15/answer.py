@@ -13,8 +13,12 @@ import numpy as np
 
 from src.data import ALL_SESSIONS, AREAS, SAMPLING_RATE, Dataloader, Session
 from src.stats import compare_paired, sig_stars
+from src.utils import matched_draws
 
 SEGMENT = ("stim_start", "trial_end")
+
+N_DRAWS = 10
+SEED = 0
 
 # Trials whose segment is shorter than this are dropped: every complexity
 # estimate needs a minimum run of samples to be meaningful, and a handful of
@@ -67,25 +71,31 @@ MEASURES = {
 }
 
 
-def area_mean_lfp(session: Session) -> np.ndarray:
-    """One LFP trace per area, averaged over that area's channels. [n_areas, T]
+def area_mean_lfp(
+    session: Session, channels: dict[int, np.ndarray] | None = None
+) -> np.ndarray:
+    """One LFP trace per area, averaged over that area's channels. [n_areas, T]"""
+    traces = []
+    for area in AREAS:
+        lfp = session.get_lfp_in(area)
+        if channels is not None:
+            lfp = lfp[channels[area]]
+        traces.append(lfp.mean(axis=0))
+    return np.stack(traces)
 
-    Channel counts differ per area and per session, so collapsing each area to
-    its mean trace gives every area a single comparable "neural signal" and
-    matches how the rest of the repo reduces an area's LFP (see Q8/Q12).
-    """
-    return np.stack([session.get_lfp_in(area).mean(axis=0) for area in AREAS])
 
-
-def window_lfp_by_area(session: Session) -> dict[int, list[np.ndarray]]:
+def window_lfp_by_area(
+    session: Session, channels: dict[int, np.ndarray] | None = None
+) -> dict[int, list[np.ndarray]]:
     """LFP restricted to each stim->end segment, split by area.
 
     Returns ``{area: [trace_per_trial, ...]}`` where each trace is the area's
-    channel-averaged LFP over one valid trial's stim->end window. Trials are
-    windowed once (same ``lo``/``hi`` for every area) so a trial that is kept in
-    one area is kept in all three, keeping the areas paired trial-by-trial.
+    channel-averaged LFP (over ``channels``, see :func:`area_mean_lfp`) over
+    one valid trial's stim->end window. Trials are windowed once (same
+    ``lo``/``hi`` for every area) so a trial that is kept in one area is kept
+    in all three, keeping the areas paired trial-by-trial.
     """
-    lfp = area_mean_lfp(session)
+    lfp = area_mean_lfp(session, channels)
     lo, hi, keep = session.event_bounds(*SEGMENT, min_samples=MIN_SAMPLES)
     kept = np.flatnonzero(keep)
     return {area: [lfp[a, lo[t] : hi[t]] for t in kept] for a, area in enumerate(AREAS)}
@@ -116,10 +126,26 @@ if __name__ == "__main__":
         name: defaultdict(list) for name in MEASURES
     }
 
-    print(f"Complexity of {SEGMENT[0]}->{SEGMENT[1]} LFP (mean over trials, per area)")
+    print(
+        f"Complexity of {SEGMENT[0]}->{SEGMENT[1]} LFP "
+        f"(mean over trials and {N_DRAWS} channel-matched draws, per area)"
+    )
     for s in dl:
-        windows = window_lfp_by_area(s)
-        comp = session_complexity(windows)
+        draws, k = matched_draws(
+            {a: s.get_lfp_in(a).shape[0] for a in AREAS}, N_DRAWS, [SEED, s.id]
+        )
+        # One complexity table per channel draw, then averaged per (measure, area).
+        per_draw = []
+        for d in range(N_DRAWS):
+            windows = window_lfp_by_area(s, {a: draws[a][d] for a in AREAS})
+            per_draw.append(session_complexity(windows))
+        comp = {
+            name: {
+                area: float(np.mean([c[name][area] for c in per_draw]))
+                for area in AREAS
+            }
+            for name in MEASURES
+        }
         kept = len(windows[AREAS[0]])
         cells = []
         for area in AREAS:
@@ -128,7 +154,10 @@ if __name__ == "__main__":
             pe = comp["permutation entropy"][area]
             se = comp["spectral entropy"][area]
             cells.append(f"area {area}: PE={pe:.4f} SE={se:.4f}")
-        print(f"  session {s.id:>2} ({kept:>3} trials)  " + "  ".join(cells))
+        print(
+            f"  session {s.id:>2} ({kept:>3} trials, {k:>2} ch matched)  "
+            + "  ".join(cells)
+        )
 
     # Run the standard paired comparison (Friedman + Holm-Wilcoxon) per measure.
     results = {}
@@ -198,7 +227,10 @@ if __name__ == "__main__":
         ax.set_ylim(res.paired.min() - step, top + step * (len(res.pairs) + 2))
         ax.set_title(f"{name}\nFriedman p = {res.p_omnibus:.3g}")
 
-    fig.suptitle(f"Neural complexity by area, {SEGMENT[0]} -> {SEGMENT[1]} segment")
+    fig.suptitle(
+        f"Neural complexity by area (channel-matched), "
+        f"{SEGMENT[0]} -> {SEGMENT[1]} segment"
+    )
     fig.tight_layout()
     out = Path("figures/Q15")
     out.mkdir(parents=True, exist_ok=True)

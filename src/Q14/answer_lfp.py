@@ -12,7 +12,10 @@ import numpy as np
 
 from src.data import ALL_SESSIONS, AREAS, Dataloader
 from src.stats import compare_paired, sig_stars
-from src.utils import get_modularity
+from src.utils import get_modularity, matched_draws
+
+N_DRAWS = 20
+SEED = 0
 
 if __name__ == "__main__":
     dl = Dataloader(list(ALL_SESSIONS))
@@ -20,13 +23,23 @@ if __name__ == "__main__":
     mod_per_area: dict[int, list[float]] = defaultdict(list)
 
     for s in dl:
+        lfps = {a: s.get_lfp_in(a) for a in AREAS}
+        draws, k = matched_draws(
+            {a: lfp.shape[0] for a, lfp in lfps.items()}, N_DRAWS, [SEED, s.id]
+        )
         cells = []
         for area in AREAS:
-            lfp = s.get_lfp_in(area)
-            mod = get_modularity(lfp)
+            mod = float(
+                np.mean(
+                    [
+                        get_modularity(lfps[area][idx], seed=d)
+                        for d, idx in enumerate(draws[area])
+                    ]
+                )
+            )
             mod_per_area[area].append(mod)
-            cells.append(f"area {area}: Q={mod:>6.3f} (ch={lfp.shape[0]:>3})")
-        print(f"session {s.id:>2}  " + "  ".join(cells))
+            cells.append(f"area {area}: Q={mod:>6.3f} (ch={lfps[area].shape[0]:>3})")
+        print(f"session {s.id:>2} [{k:>2} ch matched]  " + "  ".join(cells))
 
     # [n_sessions, n_areas]; areas stay paired session-by-session. compare_paired
     # drops sessions missing an area, then runs the standard Friedman omnibus +
@@ -36,7 +49,10 @@ if __name__ == "__main__":
     paired, mean, sem = res.paired, res.mean, res.sem
     pairs, holm, p_omnibus = res.pairs, res.holm_p, res.p_omnibus
 
-    print("\n=== LFP correlation-graph modularity by area ===")
+    print(
+        f"\n=== LFP correlation-graph modularity by area "
+        f"(channel-matched, mean of {N_DRAWS} draws) ==="
+    )
     for j, area in enumerate(AREAS):
         print(f"area {area}: mean Q = {mean[j]:.4f} +/- {sem[j]:.4f} SEM")
     print(f"(n = {res.n} sessions with all three areas)")
@@ -83,7 +99,9 @@ if __name__ == "__main__":
     ax.set_xticks(x)
     ax.set_xticklabels([f"Area {a}" for a in AREAS])
     ax.set_ylabel("Modularity Q (LFP correlation graph)")
-    ax.set_title(f"LFP modularity by area\nFriedman p = {p_omnibus:.3g}")
+    ax.set_title(
+        f"LFP modularity by area (channel-matched)\nFriedman p = {p_omnibus:.3g}"
+    )
     ax.set_ylim(0, top + step * (len(pairs) + 2))
     fig.tight_layout()
 

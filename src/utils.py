@@ -66,7 +66,9 @@ def binned_trains(session: Session, area: int, bin_s: float) -> np.ndarray:
     edges = np.arange(session.spikes.min(), session.spikes.max() + bin_s, bin_s)
     trains = np.empty((len(edges) - 1, len(clusters)))
     for j, c in enumerate(clusters):
-        trains[:, j] = np.histogram(session.spikes[session.clusters == c], bins=edges)[0]
+        trains[:, j] = np.histogram(session.spikes[session.clusters == c], bins=edges)[
+            0
+        ]
     return trains[:, trains.std(axis=0) > 0]
 
 
@@ -97,3 +99,21 @@ def get_modularity(signals: np.ndarray, seed: int = 0) -> float:
         return float("nan")
     communities = nx.community.louvain_communities(graph, weight="weight", seed=seed)
     return nx.community.modularity(graph, communities, weight="weight")
+
+
+def matched_draws(
+    counts: dict[int, int], n_draws: int, seed
+) -> tuple[dict[int, np.ndarray], int]:
+    """Random index subsets that equalise the channel/unit count across areas."""
+    k = min(counts.values())
+    rng = np.random.default_rng(seed)
+    draws = {
+        area: np.vstack(
+            [
+                rng.choice(n, k, replace=False) if n > k else np.arange(k)
+                for _ in range(n_draws)
+            ]
+        )
+        for area, n in counts.items()
+    }
+    return draws, k

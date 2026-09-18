@@ -17,6 +17,7 @@ from sklearn.svm import SVC
 
 from src.data import ALL_SESSIONS, AREAS, SAMPLING_RATE, Dataloader, Session
 from src.stats import compare_paired, one_sample_wilcoxon, sig_stars
+from src.utils import matched_draws
 
 SEED = 43
 target_variable = "variable_A"
@@ -34,6 +35,7 @@ MAX_SEGMENT_PCT = 95
 N_FOLDS = 5
 CLASS_WEIGHT = "balanced"
 SCORING = "balanced_accuracy"
+N_DRAWS = 5
 
 
 def decode(X: np.ndarray, y: np.ndarray, n_folds: int, random_state) -> np.ndarray:
@@ -52,6 +54,31 @@ def decode(X: np.ndarray, y: np.ndarray, n_folds: int, random_state) -> np.ndarr
         cv=cv,
         scoring=SCORING,
     )
+
+
+def decode_matched(
+    feats: dict[int, np.ndarray], y: np.ndarray, random_state, seed
+) -> tuple[np.ndarray, np.ndarray, int]:
+    """Channel/unit-matched decoding scores of one session.
+
+    ``feats`` is ``{area: [n_trials, n_segments, n_signals, N_BINS]}`` where
+    the signals axis holds channels (LFP) or units (spikes). Returns the
+    whole-trial score per area ``[n_areas]``, the single-segment scores
+    ``[n_areas, n_segments]``, and the matched signal count ``k``; each score
+    is the mean over N_DRAWS random ``k``-signal subsets of the mean CV score.
+    """
+    n_seg = len(segment_names)
+    draws, k = matched_draws({a: x.shape[2] for a, x in feats.items()}, N_DRAWS, seed)
+    whole = np.zeros((len(AREAS), N_DRAWS))
+    by_segment = np.zeros((len(AREAS), n_seg, N_DRAWS))
+    for j, area in enumerate(AREAS):
+        for d, idx in enumerate(draws[area]):
+            x = feats[area][:, :, idx]
+            whole[j, d] = decode(x.reshape(y.size, -1), y, N_FOLDS, random_state).mean()
+            for seg in range(n_seg):
+                x_k = x[:, seg].reshape(y.size, -1)
+                by_segment[j, seg, d] = decode(x_k, y, N_FOLDS, random_state).mean()
+    return whole.mean(axis=1), by_segment.mean(axis=2), k
 
 
 def trial_windows(session: Session) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -115,7 +142,8 @@ if __name__ == "__main__":
 
     print(
         f"=== decoding {target_variable} per area: {N_FOLDS}-fold CV balanced "
-        f"accuracy, linear SVM on {n_seg} segments x {N_BINS} bins x channels ==="
+        f"accuracy, linear SVM on {n_seg} segments x {N_BINS} bins x channels "
+        f"(channel-matched, mean of {N_DRAWS} draws) ==="
     )
 
     whole = np.full((len(dl), len(AREAS)), np.nan)
@@ -127,18 +155,12 @@ if __name__ == "__main__":
         feats, y = build_features(s)
         n_trials[i] = y.size
         rs = int(np.random.default_rng([SEED, s.id]).integers(2**31))
-        cells = []
-        for j, area in enumerate(AREAS):
-            # [n_trials, n_segments, n_channels, N_BINS] -> flat feature rows
-            x = feats[area]
-            whole[i, j] = decode(x.reshape(y.size, -1), y, N_FOLDS, rs).mean()
-            for k in range(n_seg):
-                x_k = x[:, k].reshape(y.size, -1)
-                by_segment[i, j, k] = decode(x_k, y, N_FOLDS, rs).mean()
-            cells.append(f"area {area}: {whole[i, j]:.3f}")
+        # [n_trials, n_segments, n_channels, N_BINS] per area; channels matched
+        whole[i], by_segment[i], k = decode_matched(feats, y, rs, [SEED, s.id])
+        cells = [f"area {area}: {whole[i, j]:.3f}" for j, area in enumerate(AREAS)]
         counts = np.bincount(y, minlength=2)
         print(
-            f"session {s.id:>2}  "
+            f"session {s.id:>2} [{k:>2} ch matched]  "
             + "  ".join(cells)
             + f"   (trials {y.size}, {target_variable}=0/1: {counts[0]}/{counts[1]})"
         )
@@ -229,7 +251,9 @@ if __name__ == "__main__":
     )
     axL.set_ylabel(f"Balanced accuracy, {target_variable} ({N_FOLDS}-fold CV)")
     axL.set_ylim(min(CHANCE - step, paired.min() - step), top + step * (len(pairs) + 2))
-    axL.set_title(f"Whole-trial decoding by area\nFriedman p = {p_omnibus:.3g}")
+    axL.set_title(
+        f"Whole-trial decoding by area (channel-matched)\nFriedman p = {p_omnibus:.3g}"
+    )
 
     # Right: the same score from each segment alone, grouped by area.
     width = 0.25

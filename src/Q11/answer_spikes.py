@@ -20,9 +20,10 @@ from src.data import ALL_SESSIONS, AREAS, SAMPLING_RATE, Dataloader, Session
 from src.Q11.answer import (
     CHANCE,
     N_BINS,
+    N_DRAWS,
     N_FOLDS,
     SEED,
-    decode,
+    decode_matched,
     segment_names,
     target_variable,
     trial_windows,
@@ -86,7 +87,8 @@ if __name__ == "__main__":
 
     print(
         f"=== decoding {target_variable} per area: {N_FOLDS}-fold CV balanced "
-        f"accuracy, linear SVM on {n_seg} segments x {N_BINS} bins x units ==="
+        f"accuracy, linear SVM on {n_seg} segments x {N_BINS} bins x units "
+        f"(unit-matched, mean of {N_DRAWS} draws) ==="
     )
     # Mean CV score per (session, area): [n_sessions, n_areas], and the same
     # restricted to one segment at a time: [n_sessions, n_areas, n_segments].
@@ -98,16 +100,18 @@ if __name__ == "__main__":
         feats, y = build_features(s)
         # Same CV seed as the LFP version -> identical fold assignment.
         rs = int(np.random.default_rng([SEED, s.id]).integers(2**31))
-        cells = []
-        for j, area in enumerate(AREAS):
-            x = feats[area]
-            n_units[i, j] = x.shape[2]
-            whole[i, j] = decode(x.reshape(y.size, -1), y, N_FOLDS, rs).mean()
-            for k in range(n_seg):
-                x_k = x[:, k].reshape(y.size, -1)
-                by_segment[i, j, k] = decode(x_k, y, N_FOLDS, rs).mean()
-            cells.append(f"area {area}: {whole[i, j]:.3f} ({n_units[i, j]:>2} units)")
-        print(f"session {s.id:>2}  " + "  ".join(cells) + f"   (trials {y.size})")
+        n_units[i] = [feats[a].shape[2] for a in AREAS]
+        # [n_trials, n_segments, n_units, N_BINS] per area; units matched
+        whole[i], by_segment[i], k = decode_matched(feats, y, rs, [SEED, s.id])
+        cells = [
+            f"area {area}: {whole[i, j]:.3f} ({n_units[i, j]:>2} units)"
+            for j, area in enumerate(AREAS)
+        ]
+        print(
+            f"session {s.id:>2} [{k:>2} units matched]  "
+            + "  ".join(cells)
+            + f"   (trials {y.size})"
+        )
 
     res = compare_paired(whole, AREAS)
     paired, mean, sem = res.paired, res.mean, res.sem
@@ -191,7 +195,8 @@ if __name__ == "__main__":
     axL.set_ylabel(f"Balanced accuracy, {target_variable} ({N_FOLDS}-fold CV)")
     axL.set_ylim(min(CHANCE - step, paired.min() - step), top + step * (len(pairs) + 2))
     axL.set_title(
-        f"Whole-trial decoding by area, spike counts\nFriedman p = {p_omnibus:.3g}"
+        f"Whole-trial decoding by area, spike counts (unit-matched)\n"
+        f"Friedman p = {p_omnibus:.3g}"
     )
 
     width = 0.25

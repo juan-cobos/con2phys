@@ -17,9 +17,11 @@ import numpy as np
 
 from src.data import ALL_SESSIONS, AREAS, Dataloader
 from src.stats import compare_paired, sig_stars
-from src.utils import binned_trains, get_modularity
+from src.utils import binned_trains, get_modularity, matched_draws
 
 BIN_S = 0.100  # spike-train bin width (matches Q4's 100 ms timescale)
+N_DRAWS = 20
+SEED = 0
 
 
 if __name__ == "__main__":
@@ -28,14 +30,26 @@ if __name__ == "__main__":
     mod_per_area: dict[int, list[float]] = defaultdict(list)
 
     for s in dl:
+        trains = {a: binned_trains(s, a, BIN_S) for a in AREAS}
+        draws, k = matched_draws(
+            {a: t.shape[1] for a, t in trains.items()}, N_DRAWS, [SEED, s.id]
+        )
         cells = []
         for area in AREAS:
-            trains = binned_trains(s, area, BIN_S)
             # get_modularity correlates across rows, so pass units-as-rows.
-            mod = get_modularity(trains.T)
+            mod = float(
+                np.mean(
+                    [
+                        get_modularity(trains[area][:, idx].T, seed=d)
+                        for d, idx in enumerate(draws[area])
+                    ]
+                )
+            )
             mod_per_area[area].append(mod)
-            cells.append(f"area {area}: Q={mod:>6.3f} (units={trains.shape[1]:>3})")
-        print(f"session {s.id:>2}  " + "  ".join(cells))
+            cells.append(
+                f"area {area}: Q={mod:>6.3f} (units={trains[area].shape[1]:>3})"
+            )
+        print(f"session {s.id:>2} [{k:>2} units matched]  " + "  ".join(cells))
 
     # [n_sessions, n_areas]; areas stay paired session-by-session. compare_paired
     # drops sessions missing an area, then runs the standard Friedman omnibus +
@@ -45,7 +59,10 @@ if __name__ == "__main__":
     paired, mean, sem = res.paired, res.mean, res.sem
     pairs, holm, p_omnibus = res.pairs, res.holm_p, res.p_omnibus
 
-    print("\n=== spike-cluster correlation-graph modularity by area ===")
+    print(
+        f"\n=== spike-cluster correlation-graph modularity by area "
+        f"(unit-matched, mean of {N_DRAWS} draws) ==="
+    )
     for j, area in enumerate(AREAS):
         print(f"area {area}: mean Q = {mean[j]:.4f} +/- {sem[j]:.4f} SEM")
     print(f"(n = {res.n} sessions with all three areas)")
@@ -92,7 +109,9 @@ if __name__ == "__main__":
     ax.set_xticks(x)
     ax.set_xticklabels([f"Area {a}" for a in AREAS])
     ax.set_ylabel("Modularity Q (spike-cluster correlation graph)")
-    ax.set_title(f"Spike-cluster modularity by area\nFriedman p = {p_omnibus:.3g}")
+    ax.set_title(
+        f"Spike-cluster modularity by area (unit-matched)\nFriedman p = {p_omnibus:.3g}"
+    )
     ax.set_ylim(0, top + step * (len(pairs) + 2))
     fig.tight_layout()
 

@@ -12,7 +12,7 @@ import numpy as np
 
 from src.data import ALL_SESSIONS, AREAS, Dataloader
 from src.stats import compare_paired, sig_stars
-from src.utils import get_stim_lfp
+from src.utils import get_stim_lfp, matched_draws
 
 # Reference variance level marked on the cumulative-variance curves.
 EXPLAINED_VARIANCE = 95
@@ -20,6 +20,8 @@ EXPLAINED_VARIANCE = 95
 # session's own durations; a few aborted trials per session span ~1000 s and
 # would otherwise swamp the concatenated segments.
 MAX_SEGMENT_PCT = 95
+N_DRAWS = 20
+SEED = 0
 
 
 def eig_spectrum(lfp: np.ndarray) -> np.ndarray:
@@ -49,15 +51,23 @@ if __name__ == "__main__":
     curves_per_area: dict[int, list[np.ndarray]] = defaultdict(list)
 
     for s in dl:
+        lfps = {a: get_stim_lfp(s, a, max_segment_pct=MAX_SEGMENT_PCT) for a in AREAS}
+        draws, k = matched_draws(
+            {a: lfp.shape[0] for a, lfp in lfps.items()}, N_DRAWS, [SEED, s.id]
+        )
         cells = []
         for area in AREAS:
-            lfp = get_stim_lfp(s, area, max_segment_pct=MAX_SEGMENT_PCT)
-            eigenvals = eig_spectrum(lfp)
-            pr = participation_ratio(eigenvals)
+            spectra = [eig_spectrum(lfps[area][idx]) for idx in draws[area]]
+            pr = float(np.mean([participation_ratio(e) for e in spectra]))
             pr_per_area[area].append(pr)
-            curves_per_area[area].append(explained_variance_curve(eigenvals))
-            cells.append(f"area {area}: PR={pr:>5.2f} (ch={lfp.shape[0]:>3})")
-        print(f"session {s.id:>2}  " + "  ".join(cells))
+            # Every draw has k channels, so the curves line up and can be
+            # averaged (truncated to the shortest, in case a draw lost a
+            # non-positive eigenvalue).
+            curves = [explained_variance_curve(e) for e in spectra]
+            n_comp = min(len(c) for c in curves)
+            curves_per_area[area].append(np.mean([c[:n_comp] for c in curves], axis=0))
+            cells.append(f"area {area}: PR={pr:>5.2f} (ch={lfps[area].shape[0]:>3})")
+        print(f"session {s.id:>2} [{k:>2} ch matched]  " + "  ".join(cells))
 
     # [n_sessions, n_areas]; areas stay paired session-by-session. compare_paired
     # drops sessions missing an area, then runs the standard Friedman omnibus +
@@ -67,7 +77,10 @@ if __name__ == "__main__":
     paired, mean, sem = res.paired, res.mean, res.sem
     pairs, holm, p_omnibus = res.pairs, res.holm_p, res.p_omnibus
 
-    print("\n=== neural dimensionality (participation ratio) by area ===")
+    print(
+        f"\n=== neural dimensionality (participation ratio, channel-matched, "
+        f"mean of {N_DRAWS} draws) by area ==="
+    )
     for j, area in enumerate(AREAS):
         print(f"area {area}: mean PR = {mean[j]:.3f} +/- {sem[j]:.3f} SEM")
     print(f"(n = {res.n} sessions with all three areas)")
@@ -114,7 +127,9 @@ if __name__ == "__main__":
     ax.set_xticks(x)
     ax.set_xticklabels([f"Area {a}" for a in AREAS])
     ax.set_ylabel("Effective dimensionality (participation ratio)")
-    ax.set_title(f"LFP dimensionality by area\nFriedman p = {p_omnibus:.3g}")
+    ax.set_title(
+        f"LFP dimensionality by area (channel-matched)\nFriedman p = {p_omnibus:.3g}"
+    )
     ax.set_ylim(0, top + step * (len(pairs) + 2))
     fig.tight_layout()
 
