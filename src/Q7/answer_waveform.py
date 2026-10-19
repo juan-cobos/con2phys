@@ -10,21 +10,23 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.stats import chi2_contingency
 
-from src.data import ALL_SESSIONS, AREAS, SAMPLING_RATE, Dataloader, Session
+from src.data import ALL_SESSIONS, AREAS, WAVEFORM_SAMPLING_RATE, Dataloader, Session
 from src.stats import compare_paired, sig_stars
 
 # Narrow/broad cut, picked from the data: pooled over all sessions the
 # trough-to-peak durations are bimodal, with a narrow mode at 6-8 samples, a
 # broad mode at 14-16 samples and a clear valley at ~10.5 samples. Expressed in
-# ms with the dataset's SAMPLING_RATE; THRESHOLD_SWEEP shows how much the
-# answer depends on the exact value.
+# ms with the waveform sampling rate (30 kHz); THRESHOLD_SWEEP shows how much
+# the answer depends on the exact value.
 VALLEY_SAMPLES = 10.5
-THRESHOLD_MS = VALLEY_SAMPLES / SAMPLING_RATE * 1e3
-THRESHOLD_SWEEP = tuple(n / SAMPLING_RATE * 1e3 for n in (7.5, 9.0, 10.5, 12.0, 13.5))
+THRESHOLD_MS = VALLEY_SAMPLES / WAVEFORM_SAMPLING_RATE * 1e3
+THRESHOLD_SWEEP = tuple(n / WAVEFORM_SAMPLING_RATE * 1e3 for n in (7.5, 9.0, 10.5, 12.0, 13.5))
 MIN_UNITS = 5
 
 
-def waveform_durations(waveforms: np.ndarray, fs: float = SAMPLING_RATE) -> np.ndarray:
+def waveform_durations(
+    waveforms: np.ndarray, fs: float = WAVEFORM_SAMPLING_RATE
+) -> np.ndarray:
     """Trough-to-peak duration (ms) of each mean waveform. [n_units]"""
     w = waveforms.astype(float)
     trough = w.argmin(axis=1)
@@ -65,7 +67,7 @@ if __name__ == "__main__":
     n_narrow = np.zeros((len(dl), len(AREAS)), dtype=int)
     n_units = np.zeros_like(n_narrow)
 
-    print(f"=== putative fast-spiking units (trough-to-peak < {THRESHOLD_MS} ms) ===")
+    print(f"=== putative fast-spiking units (trough-to-peak < {THRESHOLD_MS:.2f} ms) ===")
     for i, s in enumerate(dl):
         duration = waveform_durations(s.waveforms)
         all_durations.append(duration)
@@ -138,7 +140,9 @@ if __name__ == "__main__":
     fig, (axL, axR) = plt.subplots(1, 2, figsize=(11, 5))
     colors = ["#4C72B0", "#DD8452", "#55A868"]
 
-    bins = np.arange(0, 1.2 + 0.025, 0.025)
+    # One bin per waveform sample: durations are whole samples, so finer or
+    # misaligned bins alias into a comb and coarser ones hide the narrow mode.
+    bins = (np.arange(36) + 0.5) / WAVEFORM_SAMPLING_RATE * 1e3
     for j, area in enumerate(AREAS):
         axL.hist(
             durations[ok & (areas == area)],
@@ -148,7 +152,7 @@ if __name__ == "__main__":
             label=f"area {area} (n={int((ok & (areas == area)).sum())})",
         )
     axL.axvline(THRESHOLD_MS, color="k", ls="--", lw=1)
-    axL.text(THRESHOLD_MS, axL.get_ylim()[1] * 0.95, f" {THRESHOLD_MS} ms", va="top")
+    axL.text(THRESHOLD_MS, axL.get_ylim()[1] * 0.95, f" {THRESHOLD_MS:.2f} ms", va="top")
     axL.set_xlabel("Trough-to-peak duration (ms)")
     axL.set_ylabel("Units")
     axL.set_title(

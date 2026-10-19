@@ -9,7 +9,8 @@ import polars as pl
 DATA_DIR = Path("dataset")
 VALID_IDS = set(range(1, 19))
 VERTICAL_SPACING = 20  # um
-SAMPLING_RATE = 500  # Hz
+SAMPLING_RATE = 500  # Hz, LFP and spike-time binning
+WAVEFORM_SAMPLING_RATE = 30_000  # Hz, mean spike waveforms
 ALL_SESSIONS = list(VALID_IDS)
 AREAS = (1, 2, 3)
 

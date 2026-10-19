@@ -145,7 +145,7 @@ if __name__ == "__main__":
     narrow = duration < THRESHOLD_MS
     kappa = cohen_kappa_score(narrow[both], fs[both])
     print(
-        f"\n=== agreement with the waveform criterion (< {THRESHOLD_MS} ms), {int(both.sum())} units ==="
+        f"\n=== agreement with the waveform criterion (< {THRESHOLD_MS:.2f} ms), {int(both.sum())} units ==="
     )
     print(f"Cohen's kappa = {kappa:.3f}")
     print(
