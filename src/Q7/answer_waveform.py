@@ -20,7 +20,9 @@ from src.stats import compare_paired, sig_stars
 # the answer depends on the exact value.
 VALLEY_SAMPLES = 10.5
 THRESHOLD_MS = VALLEY_SAMPLES / WAVEFORM_SAMPLING_RATE * 1e3
-THRESHOLD_SWEEP = tuple(n / WAVEFORM_SAMPLING_RATE * 1e3 for n in (7.5, 9.0, 10.5, 12.0, 13.5))
+THRESHOLD_SWEEP = tuple(
+    n / WAVEFORM_SAMPLING_RATE * 1e3 for n in (7.5, 9.0, 10.5, 12.0, 13.5)
+)
 MIN_UNITS = 5
 
 
@@ -67,7 +69,9 @@ if __name__ == "__main__":
     n_narrow = np.zeros((len(dl), len(AREAS)), dtype=int)
     n_units = np.zeros_like(n_narrow)
 
-    print(f"=== putative fast-spiking units (trough-to-peak < {THRESHOLD_MS:.2f} ms) ===")
+    print(
+        f"=== putative fast-spiking units (trough-to-peak < {THRESHOLD_MS:.2f} ms) ==="
+    )
     for i, s in enumerate(dl):
         duration = waveform_durations(s.waveforms)
         all_durations.append(duration)
@@ -152,7 +156,9 @@ if __name__ == "__main__":
             label=f"area {area} (n={int((ok & (areas == area)).sum())})",
         )
     axL.axvline(THRESHOLD_MS, color="k", ls="--", lw=1)
-    axL.text(THRESHOLD_MS, axL.get_ylim()[1] * 0.95, f" {THRESHOLD_MS:.2f} ms", va="top")
+    axL.text(
+        THRESHOLD_MS, axL.get_ylim()[1] * 0.95, f" {THRESHOLD_MS:.2f} ms", va="top"
+    )
     axL.set_xlabel("Trough-to-peak duration (ms)")
     axL.set_ylabel("Units")
     axL.set_title(
