@@ -63,7 +63,10 @@ if __name__ == "__main__":
         f"(unit-matched, mean of {N_DRAWS} draws) ==="
     )
     for j, area in enumerate(AREAS):
-        print(f"area {area}: mean Q = {mean[j]:.4f} +/- {sem[j]:.4f} SEM")
+        print(
+            f"area {area}: mean Q = {mean[j]:.4f} +/- {sem[j]:.4f} SEM, "
+            f"95% CI [{mean[j] - res.ci[j]:.4f}, {mean[j] + res.ci[j]:.4f}]"
+        )
     print(f"(n = {res.n} sessions with all three areas)")
 
     print(f"\nFriedman across areas: chi2 = {res.chi2:.3f}, p = {p_omnibus:.4g}")
