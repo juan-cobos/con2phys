@@ -11,9 +11,7 @@ import numpy as np
 
 from src.data import ALL_SESSIONS, AREAS, Dataloader
 from src.stats import compare_paired, sig_stars
-from src.utils import binned_trains
-
-BIN = 0.100  # 100 ms
+from src.utils import BIN_SIZE, binned_trains
 
 dl = Dataloader(ALL_SESSIONS)
 
@@ -28,11 +26,13 @@ def interaction_strength(trains: np.ndarray) -> float:
 
 
 strength_by_ba: dict[int, list[float]] = defaultdict(list)
+units_by_ba: dict[int, list[int]] = defaultdict(list)
 for s in dl:
     for area in AREAS:
-        trains = binned_trains(s, area, BIN)
+        trains = binned_trains(s, area, BIN_SIZE)
         strength = interaction_strength(trains)
         strength_by_ba[area].append(strength)
+        units_by_ba[area].append(trains.shape[1])
         print(
             f"session {s.id} area {area}: {trains.shape[1]} clusters, "
             f"trains {trains.shape}, "
@@ -50,7 +50,12 @@ pairs, holm, p_omnibus = res.pairs, res.holm_p, res.p_omnibus
 
 print("\n=== pairwise interaction strength across sessions ===")
 for j, area in enumerate(AREAS):
-    print(f"area {area}: mean |r| = {mean[j]:.4f} +/- {sem[j]:.4f} SEM")
+    units = units_by_ba[area]
+    print(
+        f"area {area}: mean |r| = {mean[j]:.4f} +/- {sem[j]:.4f} SEM, "
+        f"95% CI [{mean[j] - res.ci[j]:.4f}, {mean[j] + res.ci[j]:.4f}], "
+        f"units/session {min(units)}-{max(units)} (median {np.median(units):g})"
+    )
 print(f"(n = {res.n} sessions with all three areas)")
 
 print(f"\nFriedman across areas: chi2 = {res.chi2:.3f}, p = {p_omnibus:.4g}")
@@ -62,8 +67,7 @@ for (i, j), rp, hp in zip(pairs, res.raw_p, holm):
         f"p_raw = {rp:.4g}, p_holm = {hp:.4g} {sig_stars(hp)}"
     )
 
-best = res.winner("max")
-print(f"\nStrongest pairwise interactions at 100 ms: area {best}")
+print(f"\nStrongest pairwise interactions at 100 ms: {res.describe_winner('max')}")
 
 
 # Bar plot: mean +/- SEM per area, with per-session points and significance

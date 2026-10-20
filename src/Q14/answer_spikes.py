@@ -17,9 +17,8 @@ import numpy as np
 
 from src.data import ALL_SESSIONS, AREAS, Dataloader
 from src.stats import compare_paired, sig_stars
-from src.utils import binned_trains, get_modularity, matched_draws
+from src.utils import BIN_SIZE, binned_trains, get_modularity, matched_draws
 
-BIN_S = 0.100  # spike-train bin width (matches Q4's 100 ms timescale)
 N_DRAWS = 20
 SEED = 0
 
@@ -30,7 +29,7 @@ if __name__ == "__main__":
     mod_per_area: dict[int, list[float]] = defaultdict(list)
 
     for s in dl:
-        trains = {a: binned_trains(s, a, BIN_S) for a in AREAS}
+        trains = {a: binned_trains(s, a, BIN_SIZE) for a in AREAS}
         draws, k = matched_draws(
             {a: t.shape[1] for a, t in trains.items()}, N_DRAWS, [SEED, s.id]
         )
@@ -76,8 +75,7 @@ if __name__ == "__main__":
             f"p_raw = {rp:.4g}, p_holm = {hp:.4g} {sig_stars(hp)}"
         )
 
-    lowest = res.winner("min")
-    print(f"\nLowest modularity: area {lowest}")
+    print(f"\nLowest modularity: {res.describe_winner('min')}")
 
     # Bar plot: mean +/- SEM per area, with per-session points and significance
     # brackets for each pairwise comparison.

@@ -66,8 +66,7 @@ if __name__ == "__main__":
             f"p_raw = {rp:.4g}, p_holm = {hp:.4g} {sig_stars(hp)}"
         )
 
-    lowest = res.winner("min")
-    print(f"\nLowest modularity: area {lowest}")
+    print(f"\nLowest modularity: {res.describe_winner('min')}")
 
     # Bar plot: mean +/- SEM per area, with per-session points and significance
     # brackets for each pairwise comparison.

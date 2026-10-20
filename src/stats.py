@@ -72,6 +72,35 @@ class PairedComparison:
         idx = np.argmax(self.mean) if which == "max" else np.argmin(self.mean)
         return self.labels[int(idx)]
 
+    def tied_winners(self, which: str = "max", alpha: float = 0.05) -> list:
+        """:meth:`winner` plus every group the post-hoc tests cannot separate
+        from it (Holm p >= ``alpha``), winner first.
+
+        The extreme mean only answers "which group is highest/lowest" if it is
+        significantly different from every other group; otherwise those
+        groups tie with it.
+        """
+        best = self.winner(which)
+        b = self.labels.index(best)
+        return [best] + [
+            self.labels[j if i == b else i]
+            for (i, j), hp in zip(self.pairs, self.holm_p)
+            if b in (i, j) and hp >= alpha
+        ]
+
+    def describe_winner(self, which: str = "max", alpha: float = 0.05) -> str:
+        """``"area 2"``, or ``"area 2 and area 3 (tied; ...)"`` when the
+        winner is not significantly different from some other group."""
+        tied = self.tied_winners(which, alpha)
+        if len(tied) == 1:
+            return f"area {tied[0]}"
+        names = " and ".join(f"area {g}" for g in sorted(tied))
+        word = "highest" if which == "max" else "lowest"
+        return (
+            f"{names} (tied; area {tied[0]} has the {word} mean but is not "
+            f"significantly different from the others)"
+        )
+
 
 def compare_paired(matrix: np.ndarray, labels, alpha: float = 0.05) -> PairedComparison:
     """Run the standard paired across-group comparison.

@@ -6,6 +6,8 @@ import numpy as np
 
 from src.data import SAMPLING_RATE, Session
 
+BIN_SIZE = 0.100  # 100 ms
+
 
 def get_stim_lfp(
     session: Session, region: int, max_segment_pct: float | None = None
@@ -55,15 +57,17 @@ def get_raw(session: Session, region: int) -> mne.io.RawArray:
     return mne.io.RawArray(lfp, info, verbose=False)
 
 
-def binned_trains(session: Session, area: int, bin_s: float) -> np.ndarray:
+def binned_trains(
+    session: Session, area: int, bin_size: float = BIN_SIZE
+) -> np.ndarray:
     """Spike-count matrix [n_bins, n_units] for one area's clusters.
 
     Each column is a unit's spike train over the whole recording, histogrammed
-    onto shared ``bin_s``-second bins. Silent units (no spikes -> constant,
+    onto shared ``bin_size``-second bins. Silent units (no spikes -> constant,
     zero-variance train) are dropped, as they carry no correlation.
     """
     clusters = session.cluster_ids[session.brain_areas == area]
-    edges = np.arange(session.spikes.min(), session.spikes.max() + bin_s, bin_s)
+    edges = np.arange(session.spikes.min(), session.spikes.max() + bin_size, bin_size)
     trains = np.empty((len(edges) - 1, len(clusters)))
     for j, c in enumerate(clusters):
         trains[:, j] = np.histogram(session.spikes[session.clusters == c], bins=edges)[

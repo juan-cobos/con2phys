@@ -162,7 +162,8 @@ if __name__ == "__main__":
     print("\n=== balanced accuracy by trial segment ===")
     for j, name in enumerate(segment_names):
         print(
-            f"{name:<24} {mean[j]:.3f} +/- {sem[j]:.3f} SEM   "
+            f"{name:<24} {mean[j]:.3f} +/- {sem[j]:.3f} SEM, "
+            f"95% CI [{mean[j] - res.ci[j]:.3f}, {mean[j] + res.ci[j]:.3f}]   "
             f"(chance {np.nanmean(chance[:, j]):.3f})"
         )
     print(f"(n = {res.n} sessions)")

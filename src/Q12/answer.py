@@ -327,7 +327,8 @@ if __name__ == "__main__":
         raw = np.mean([results[(sid, name)].accuracy for sid in dl.ids])
         base = np.mean([results[(sid, name)].baseline for sid in dl.ids])
         print(
-            f"{name:<24} balanced = {mean[j]:.3f} +/- {sem[j]:.3f} SEM   "
+            f"{name:<24} balanced = {mean[j]:.3f} +/- {sem[j]:.3f} SEM, "
+            f"95% CI [{mean[j] - res.ci[j]:.3f}, {mean[j] + res.ci[j]:.3f}]   "
             f"(accuracy {raw:.3f} vs majority baseline {base:.3f})"
         )
     print(f"(n = {res.n} sessions)")
