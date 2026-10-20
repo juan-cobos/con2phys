@@ -17,3 +17,5 @@ dataset/*
 figures/
 
 .python-version
+
+logs/
